@@ -1,0 +1,51 @@
+name: Run Tests
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '0,5,10,15,20,25,30,35,40,45,50,55 * * * *'
+
+jobs:
+
+  build_exclusions:
+
+    runs-on: ubuntu-latest
+    outputs:
+      excludes: ${{ join(steps.*.outputs.excludes) }}
+    steps:
+      - id: no_exclude
+        name: Run all builds
+        if: github.event_name == 'schedule'
+        run: echo "::set-output name=excludes::[]"
+      - id: exclude
+        name: Exclude some builds if not running on schedule
+        if: github.event_name != 'schedule'
+        run: echo "::set-output name=excludes::[{\"build-version\":\"dev\"},{\"os\":\"windows-latest\"},{\"os\":\"macos-latest\"}]"
+
+
+  build:
+
+    name: "${{ matrix.bot }} (${{ matrix.build-version }} ${{ matrix.os }})"
+    runs-on: ${{ matrix.os }}
+    needs: build_exclusions
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        node-version: [10]
+        build-version: [stable, dev]
+        bot: [bot1, bot2, bot3]
+        include:
+          - os: ubuntu-latest
+            bot: flutter_snap
+        exclude: ${{ fromJSON(needs.build_exclusions.outputs.excludes) }}
+
+    steps:
+
+      - uses: actions/checkout@v1
+
+      - name: Echo exclusions
+        run: echo '${{ needs.build_exclusions.outputs.excludes }}'
